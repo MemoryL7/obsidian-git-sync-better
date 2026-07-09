@@ -1,0 +1,9 @@
+{
+	"id": "cc-obsidian-sync",
+	"name": "CC Cloudflare Sync",
+	"version": "0.1.0",
+	"minAppVersion": "1.4.0",
+	"description": "Sync your vault to Cloudflare Workers + R2.",
+	"author": "eric",
+	"isDesktopOnly": false
+}
