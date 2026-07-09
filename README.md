@@ -23,7 +23,7 @@ mkdir -p "<你的vault路径>/.obsidian/plugins/cc-obsidian-sync"
 cp main.js manifest.json "<你的vault路径>/.obsidian/plugins/cc-obsidian-sync/"
 ```
 
-Obsidian → 设置 → 第三方插件(关闭安全模式)→ 启用 **CC Cloudflare Sync**。
+Obsidian → 设置 → 第三方插件(关闭安全模式)→ 启用 **Gitee Sync**。
 
 iOS 安装:vault 建在 iCloud,在 Mac 上把上述两个文件拷进
 `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>/.obsidian/plugins/cc-obsidian-sync/`,等 iCloud 同步后在手机上启用。

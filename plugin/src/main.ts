@@ -34,7 +34,7 @@ export default class CloudSyncPlugin extends Plugin {
 		this.statusBar = this.addStatusBarItem();
 		this.setStatus("同步:空闲");
 
-		this.addRibbonIcon("refresh-cw", "同步到 Cloudflare", () => void this.runSync());
+		this.addRibbonIcon("refresh-cw", "同步到远端仓库", () => void this.runSync());
 		this.addCommand({
 			id: "sync-now",
 			name: "立即同步",

@@ -1,9 +1,9 @@
 {
 	"id": "cc-obsidian-sync",
-	"name": "CC Cloudflare Sync",
-	"version": "0.1.0",
+	"name": "Gitee Sync",
+	"version": "0.2.0",
 	"minAppVersion": "1.4.0",
-	"description": "Sync your vault to Cloudflare Workers + R2.",
+	"description": "Sync your vault to a Gitee or GitHub repository.",
 	"author": "eric",
 	"isDesktopOnly": false
 }
