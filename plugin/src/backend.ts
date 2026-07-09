@@ -1,6 +1,5 @@
 import type { SyncSettings } from "./settings";
-import { WorkerBackend } from "./api";
-import { GiteeBackend } from "./gitee";
+import { GitHostBackend } from "./githost";
 
 export interface RemoteEntry {
 	path: string;
@@ -32,16 +31,23 @@ export interface StorageBackend {
 }
 
 export function createBackend(s: SyncSettings): StorageBackend {
-	if (s.backend === "worker") {
-		if (!s.endpoint || !s.token) {
-			throw new Error("请先在设置中填写 Worker 地址和 Token");
+	if (s.backend === "github") {
+		if (!s.githubOwner || !s.githubRepo || !s.githubToken) {
+			throw new Error("请先在设置中填写 GitHub 用户名、仓库名和访问令牌");
 		}
-		return new WorkerBackend(s.endpoint, s.token);
+		return new GitHostBackend({
+			host: "github",
+			owner: s.githubOwner,
+			repo: s.githubRepo,
+			branch: s.githubBranch || "main",
+			token: s.githubToken,
+		});
 	}
 	if (!s.giteeOwner || !s.giteeRepo || !s.giteeToken) {
 		throw new Error("请先在设置中填写 Gitee 用户名、仓库名和私人令牌");
 	}
-	return new GiteeBackend({
+	return new GitHostBackend({
+		host: "gitee",
 		owner: s.giteeOwner,
 		repo: s.giteeRepo,
 		branch: s.giteeBranch || "master",

@@ -4,9 +4,5 @@ node_modules/
 # build artifacts
 plugin/main.js
 
-# cloudflare local dev
-worker/.wrangler/
-worker/.dev.vars
-
 # os
 .DS_Store

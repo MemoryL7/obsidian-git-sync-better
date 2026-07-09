@@ -1,18 +1,20 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type CloudSyncPlugin from "./main";
 
-export type BackendType = "gitee" | "worker";
+export type BackendType = "gitee" | "github";
 
 export interface SyncSettings {
 	backend: BackendType;
-	/* Cloudflare Worker backend */
-	endpoint: string;
-	token: string;
-	/* Gitee backend */
+	/* Gitee */
 	giteeOwner: string;
 	giteeRepo: string;
 	giteeBranch: string;
 	giteeToken: string;
+	/* GitHub */
+	githubOwner: string;
+	githubRepo: string;
+	githubBranch: string;
+	githubToken: string;
 	/* common */
 	autoSyncMinutes: number;
 	syncOnStart: boolean;
@@ -21,12 +23,14 @@ export interface SyncSettings {
 
 export const DEFAULT_SETTINGS: SyncSettings = {
 	backend: "gitee",
-	endpoint: "",
-	token: "",
 	giteeOwner: "",
 	giteeRepo: "",
 	giteeBranch: "master",
 	giteeToken: "",
+	githubOwner: "",
+	githubRepo: "",
+	githubBranch: "main",
+	githubToken: "",
 	autoSyncMinutes: 0,
 	syncOnStart: false,
 	excludeFolders: "",
@@ -49,7 +53,7 @@ export class SyncSettingTab extends PluginSettingTab {
 			.addDropdown((d) =>
 				d
 					.addOption("gitee", "Gitee 仓库")
-					.addOption("worker", "Cloudflare Worker + R2")
+					.addOption("github", "GitHub 仓库")
 					.setValue(s.backend)
 					.onChange(async (v) => {
 						s.backend = v as BackendType;
@@ -90,7 +94,7 @@ export class SyncSettingTab extends PluginSettingTab {
 
 			new Setting(containerEl)
 				.setName("私人令牌")
-				.setDesc("Gitee 设置 → 私人令牌,需勾选 projects 权限")
+				.setDesc("Gitee 设置 → 安全设置 → 私人令牌,需勾选 projects 权限")
 				.addText((t) => {
 					t.inputEl.type = "password";
 					t.setValue(s.giteeToken).onChange(async (v) => {
@@ -100,22 +104,44 @@ export class SyncSettingTab extends PluginSettingTab {
 				});
 		} else {
 			new Setting(containerEl)
-				.setName("Worker 地址")
-				.setDesc("Cloudflare Worker 的完整 URL,例如 https://cc-obsidian-sync.xxx.workers.dev")
+				.setName("GitHub 用户名")
+				.setDesc("仓库所属的用户名或组织名(即仓库 URL 中的 owner)")
 				.addText((t) =>
-					t.setPlaceholder("https://...workers.dev").setValue(s.endpoint).onChange(async (v) => {
-						s.endpoint = v.trim();
+					t.setPlaceholder("your-name").setValue(s.githubOwner).onChange(async (v) => {
+						s.githubOwner = v.trim();
 						await save();
 					})
 				);
 
 			new Setting(containerEl)
-				.setName("访问 Token")
-				.setDesc("与 Worker 端 AUTH_TOKEN secret 一致")
+				.setName("仓库名")
+				.setDesc("建议使用一个专门的私有仓库")
+				.addText((t) =>
+					t.setPlaceholder("obsidian-vault").setValue(s.githubRepo).onChange(async (v) => {
+						s.githubRepo = v.trim();
+						await save();
+					})
+				);
+
+			new Setting(containerEl)
+				.setName("分支")
+				.addText((t) =>
+					t.setPlaceholder("main").setValue(s.githubBranch).onChange(async (v) => {
+						s.githubBranch = v.trim() || "main";
+						await save();
+					})
+				);
+
+			new Setting(containerEl)
+				.setName("访问令牌")
+				.setDesc(
+					"GitHub Settings → Developer settings → Personal access tokens;" +
+						"fine-grained 令牌需授予目标仓库 Contents 读写权限(classic 令牌勾选 repo)"
+				)
 				.addText((t) => {
 					t.inputEl.type = "password";
-					t.setValue(s.token).onChange(async (v) => {
-						s.token = v.trim();
+					t.setValue(s.githubToken).onChange(async (v) => {
+						s.githubToken = v.trim();
 						await save();
 					});
 				});

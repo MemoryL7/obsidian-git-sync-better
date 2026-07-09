@@ -112,6 +112,10 @@ export default class CloudSyncPlugin extends Plugin {
 	async loadPluginData(): Promise<void> {
 		const data = (await this.loadData()) as Partial<PluginData> | null;
 		this.settings = { ...DEFAULT_SETTINGS, ...data?.settings };
+		// Migrate configs that predate the removal of the Cloudflare Worker backend.
+		if (this.settings.backend !== "gitee" && this.settings.backend !== "github") {
+			this.settings.backend = "gitee";
+		}
 		this.syncState = data?.syncState ?? {};
 		this.hashCache = data?.hashCache ?? {};
 	}
