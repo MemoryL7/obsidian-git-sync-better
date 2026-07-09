@@ -32,6 +32,9 @@ export default class CloudSyncPlugin extends Plugin {
 
 		this.addSettingTab(new SyncSettingTab(this.app, this));
 		this.statusBar = this.addStatusBarItem();
+		this.statusBar.addClass("mod-clickable");
+		this.statusBar.setAttribute("aria-label", "点击同步到远端仓库");
+		this.statusBar.addEventListener("click", () => void this.runSync());
 		this.setStatus("同步:空闲");
 
 		this.addRibbonIcon("refresh-cw", "同步到远端仓库", () => void this.runSync());

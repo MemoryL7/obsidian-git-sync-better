@@ -72,29 +72,13 @@ export class SyncEngine {
 			...Object.keys(base).filter((p) => !this.isExcluded(p)),
 		]);
 
-		const push = async (path: string, loc: LocalEntry, rem: RemoteEntry | undefined) => {
-			const data = await this.vault.readBinary(loc.file);
-			await backend.upload(path, data, {
-				hash: loc.hash,
-				mtime: loc.mtime,
-				remoteHash: rem?.hash,
-			});
-			nextState[path] = loc.hash;
-			summary.pushed++;
-		};
-		const pull = async (path: string, rem: RemoteEntry) => {
-			const { data, hash, mtime } = await backend.download(path);
-			const localMtime = await this.writeLocal(path, data, mtime || rem.mtime);
-			const finalHash = hash || rem.hash;
-			nextState[path] = finalHash;
-			this.plugin.hashCache[path] = {
-				mtime: localMtime,
-				size: data.byteLength,
-				hash: finalHash,
-				algo: backend.id,
-			};
-			summary.pulled++;
-		};
+		// Plan first, execute later: pulls run before pushes so an interrupted
+		// sync only ever leaves local work undone — the remote stays intact
+		// and a re-run picks up where it stopped.
+		const pulls: { path: string; rem: RemoteEntry }[] = [];
+		const localDeletes: { path: string; loc: LocalEntry }[] = [];
+		const pushes: { path: string; loc: LocalEntry; rem?: RemoteEntry }[] = [];
+		const remoteDeletes: { path: string; rem: RemoteEntry }[] = [];
 
 		for (const path of allPaths) {
 			const loc = local.get(path);
@@ -113,34 +97,62 @@ export class SyncEngine {
 			const remoteChanged = rem?.hash !== baseHash;
 
 			if (localChanged && !remoteChanged) {
-				if (loc) {
-					await push(path, loc, rem);
-				} else if (rem) {
-					await backend.remove(path, rem.hash);
-					summary.deletedRemote++;
-				}
+				if (loc) pushes.push({ path, loc, rem });
+				else if (rem) remoteDeletes.push({ path, rem });
 			} else if (remoteChanged && !localChanged) {
-				if (rem) {
-					await pull(path, rem);
-				} else if (loc) {
-					await this.vault.trash(loc.file, true);
-					delete this.plugin.hashCache[path];
-					summary.deletedLocal++;
-				}
+				if (rem) pulls.push({ path, rem });
+				else if (loc) localDeletes.push({ path, loc });
 			} else {
 				// Both sides changed since the last sync: newer mtime wins;
 				// a modification beats a deletion.
 				summary.conflicts++;
 				if (loc && rem) {
 					const remoteMtime = await this.remoteMtime(backend, path, rem);
-					if (loc.mtime >= remoteMtime) await push(path, loc, rem);
-					else await pull(path, rem);
+					if (loc.mtime >= remoteMtime) pushes.push({ path, loc, rem });
+					else pulls.push({ path, rem });
 				} else if (loc) {
-					await push(path, loc, rem);
+					pushes.push({ path, loc, rem });
 				} else if (rem) {
-					await pull(path, rem);
+					pulls.push({ path, rem });
 				}
 			}
+		}
+
+		// Phase 1: bring remote changes in.
+		for (const { path, rem } of pulls) {
+			const { data, hash, mtime } = await backend.download(path);
+			const localMtime = await this.writeLocal(path, data, mtime || rem.mtime);
+			const finalHash = hash || rem.hash;
+			nextState[path] = finalHash;
+			this.plugin.hashCache[path] = {
+				mtime: localMtime,
+				size: data.byteLength,
+				hash: finalHash,
+				algo: backend.id,
+			};
+			summary.pulled++;
+		}
+		for (const { path, loc } of localDeletes) {
+			await this.vault.trash(loc.file, true);
+			delete this.plugin.hashCache[path];
+			summary.deletedLocal++;
+		}
+
+		// Phase 2: send local changes out (sha-guarded, so a concurrent remote
+		// change surfaces as an API error instead of a silent overwrite).
+		for (const { path, loc, rem } of pushes) {
+			const data = await this.vault.readBinary(loc.file);
+			await backend.upload(path, data, {
+				hash: loc.hash,
+				mtime: loc.mtime,
+				remoteHash: rem?.hash,
+			});
+			nextState[path] = loc.hash;
+			summary.pushed++;
+		}
+		for (const { path, rem } of remoteDeletes) {
+			await backend.remove(path, rem.hash);
+			summary.deletedRemote++;
 		}
 
 		this.plugin.syncState = nextState;
