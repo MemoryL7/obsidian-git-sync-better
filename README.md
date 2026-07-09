@@ -15,7 +15,7 @@ Obsidian vault 同步插件,把笔记以普通文件形式存进 **Gitee 或 Git
 ### 2. 构建并安装插件
 
 ```bash
-cd plugin
+# 在仓库根目录
 npm install
 npm run build        # 产出 main.js
 

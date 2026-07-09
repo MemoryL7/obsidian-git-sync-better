@@ -2,7 +2,7 @@
 node_modules/
 
 # build artifacts
-plugin/main.js
+main.js
 
 # os
 .DS_Store
