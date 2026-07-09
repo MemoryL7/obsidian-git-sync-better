@@ -1,14 +1,9 @@
 import { requestUrl } from "obsidian";
+import type { RemoteEntry, StorageBackend } from "./backend";
 
-export interface RemoteEntry {
-	path: string;
-	hash: string;
-	mtime: number;
-	size: number;
-}
-
-/** HTTP client for the Cloudflare Worker backend. Uses requestUrl to bypass CORS. */
-export class SyncClient {
+/** Cloudflare Worker + R2 backend. Uses requestUrl to bypass CORS. */
+export class WorkerBackend implements StorageBackend {
+	readonly id = "worker-sha256";
 	private endpoint: string;
 
 	constructor(endpoint: string, private token: string) {
@@ -43,13 +38,17 @@ export class SyncClient {
 		};
 	}
 
-	async upload(path: string, data: ArrayBuffer, hash: string, mtime: number): Promise<void> {
+	async upload(
+		path: string,
+		data: ArrayBuffer,
+		opts: { hash: string; mtime: number; remoteHash?: string }
+	): Promise<void> {
 		await requestUrl({
 			url: this.fileUrl(path),
 			method: "PUT",
 			body: data,
 			contentType: "application/octet-stream",
-			headers: this.headers({ "X-Hash": hash, "X-Mtime": String(mtime) }),
+			headers: this.headers({ "X-Hash": opts.hash, "X-Mtime": String(opts.mtime) }),
 		});
 	}
 
@@ -59,5 +58,12 @@ export class SyncClient {
 			method: "DELETE",
 			headers: this.headers(),
 		});
+	}
+
+	async hashData(data: ArrayBuffer): Promise<string> {
+		const digest = await crypto.subtle.digest("SHA-256", data);
+		return Array.from(new Uint8Array(digest))
+			.map((b) => b.toString(16).padStart(2, "0"))
+			.join("");
 	}
 }

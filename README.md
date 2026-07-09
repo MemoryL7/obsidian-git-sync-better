@@ -1,93 +1,82 @@
 # cc-obsidian-syn
 
-基于 **Cloudflare Workers + R2** 的 Obsidian vault 同步方案:
+Obsidian vault 同步插件,支持两种**免费**存储后端(设置里一键切换):
 
-- `worker/` — 服务端:Cloudflare Worker,把 vault 文件存进 R2 bucket,提供带 Token 鉴权的 REST API。
-- `plugin/` — 客户端:Obsidian 插件,做基于内容哈希的**三方对比增量同步**(本地清单 / 远端清单 / 上次同步基线),支持双向同步、删除同步;两端同时改动时按修改时间"新者胜"。
+- **Gitee 私有仓库**(推荐,完全免费):插件直连 Gitee OpenAPI,每个文件的增删改对应仓库一次 commit,天然带全部历史版本。
+- **Cloudflare Workers + R2**:自建 Worker 服务端,见 `worker/` 目录(R2 免费额度 10GB,但开通需绑支付方式)。
 
-R2 免费额度(10 GB 存储、每月 100 万次写 + 1000 万次读)对个人笔记同步绰绰有余;Worker 免费版每天 10 万次请求也远超需求。
+同步引擎与后端无关:基于内容哈希的**三方对比增量同步**(本地清单 / 远端清单 / 上次同步基线),支持双向同步、删除同步;两端同时改动时按修改时间"新者胜"。
+
+## 目录
+
+- `plugin/` — Obsidian 插件(客户端,含全部同步逻辑)
+- `worker/` — Cloudflare Worker 服务端(仅 Worker 后端需要;用 Gitee 后端可完全忽略)
 
 ---
 
-## 一、部署 Worker(约 5 分钟)
+## 方式一:Gitee 后端(推荐)
 
-前置:安装 Node.js ≥ 18,注册 Cloudflare 账号并在 Dashboard 里开通 R2(免费,需绑一次支付方式但不会扣费)。
+### 1. 准备 Gitee 仓库和令牌
 
-```bash
-cd worker
-npm install
+1. 在 https://gitee.com 新建一个**私有仓库**(如 `obsidian-vault`),不需要初始化 README(空仓库即可,首次同步会自动初始化);
+2. 生成私人令牌:头像 → 设置 → 安全设置 → **私人令牌** → 生成新令牌,勾选 **projects** 权限,复制保存(只显示一次)。
 
-# 1. 登录 Cloudflare(会打开浏览器授权)
-npx wrangler login
-
-# 2. 创建 R2 bucket(名字需与 wrangler.toml 中 bucket_name 一致)
-npx wrangler r2 bucket create obsidian-vault
-
-# 3. 设置访问 Token(自己生成一个足够长的随机串,插件端要填同一个值)
-#    例如:openssl rand -hex 32
-npx wrangler secret put AUTH_TOKEN
-
-# 4. 部署
-npm run deploy
-```
-
-部署成功后会输出 Worker 地址,形如 `https://cc-obsidian-sync.<你的子域>.workers.dev`,记下来。
-
-验证一下(把 URL 和 token 换成你自己的):
-
-```bash
-curl https://cc-obsidian-sync.xxx.workers.dev/manifest \
-  -H "Authorization: Bearer <你的token>"
-# 应返回 {"files":[]}
-```
-
-本地开发调试:`echo 'AUTH_TOKEN=test-token-123' > .dev.vars && npm run dev`(本地会用模拟 R2,不动线上数据)。
-
-## 二、构建并安装插件
+### 2. 构建并安装插件
 
 ```bash
 cd plugin
 npm install
 npm run build        # 产出 main.js
-```
 
-把插件装进 vault:
-
-```bash
 mkdir -p "<你的vault路径>/.obsidian/plugins/cc-obsidian-sync"
 cp main.js manifest.json "<你的vault路径>/.obsidian/plugins/cc-obsidian-sync/"
 ```
 
-然后在 Obsidian 里:**设置 → 第三方插件**(需关闭安全模式)→ 启用 **CC Cloudflare Sync**。
+Obsidian → 设置 → 第三方插件(关闭安全模式)→ 启用 **CC Cloudflare Sync**。
 
-## 三、配置与使用
+### 3. 配置
 
-在插件设置里填:
+插件设置中选择存储后端为 **Gitee 仓库**,填:
 
 | 设置项 | 说明 |
 |---|---|
-| Worker 地址 | 第一步部署得到的 URL |
-| 访问 Token | 与 `AUTH_TOKEN` secret 相同的值 |
+| Gitee 用户名 | 仓库 URL 中的 owner |
+| 仓库名 | 上面创建的私有仓库名 |
+| 分支 | 默认 master |
+| 私人令牌 | 上面生成的 token |
 | 自动同步间隔 | 分钟数,0 = 关闭 |
-| 启动时同步 | 打开 Obsidian 后自动同步一次 |
-| 排除目录 | 逗号分隔的目录前缀,不参与同步 |
+| 排除目录 | 逗号分隔目录前缀,不参与同步 |
 
-触发同步的三种方式:左侧 ribbon 的刷新图标、命令面板"立即同步"、自动定时。状态栏会显示同步状态,完成后 Notice 提示上传/下载/删除的文件数。
+触发方式:ribbon 刷新图标 / 命令面板"立即同步" / 定时 / 启动时同步。
 
-## 四、多设备使用
+### Gitee 后端的特性与限制
 
-每台设备装同一个插件、填同一个 Worker 地址和 Token 即可。**新设备第一次同步会把远端所有文件拉下来**(空 vault + 远端有文件 = 全量下载),之后都是增量。
+- 文件内容签名用 **git blob SHA-1**,与 Gitee 服务端一致,远端清单一次 `git trees` 请求拿全量,无需逐文件询问。
+- 每次上传/删除 = 一次 commit,仓库自带完整历史,误删可从 Gitee 网页找回任意旧版本。
+- 首次同步大 vault 会产生大量 commit(每文件一个),速度受 Gitee API 限流影响,耐心等一次即可,之后都是增量。
+- 免费私有仓库容量建议 500MB 以内;单文件建议 < 50MB,超大附件放进"排除目录"。
+- 令牌泄露等于笔记泄露;令牌存放在 vault 的 `.obsidian/plugins/cc-obsidian-sync/data.json` 中,该目录不参与同步,但用 git 等工具备份 vault 时注意排除。
 
-同步语义:
+## 方式二:Cloudflare Worker + R2 后端
 
-- 只在本地改过 → 上传;只在远端改过 → 下载。
-- 本地删除会同步删除远端,反之亦然(本地删除走系统回收站,可找回)。
-- 两端都改了同一文件 → 修改时间较新的一方覆盖另一方(修改优先于删除)。
-- `.obsidian` 配置目录不参与同步(Obsidian API 的文件列表天然不含它)。
+```bash
+cd worker
+npm install
+npx wrangler login
+npx wrangler r2 bucket create obsidian-vault
+npx wrangler secret put AUTH_TOKEN     # 填自己生成的随机串,如 openssl rand -hex 32
+npm run deploy
+```
 
-## 五、注意事项
+插件设置中后端选 **Cloudflare Worker + R2**,填部署得到的 URL 和 token。API 说明见 `worker/src/index.ts` 头部注释。
 
-- Worker 请求体上限约 100 MB,单个超大附件(视频等)建议放进"排除目录"。
-- Token 即全部权限,泄露等于笔记泄露;建议 64 位以上随机串,泄露后重新 `wrangler secret put AUTH_TOKEN` 并更新各设备。
-- 传输走 HTTPS;R2 中为明文存储,如需端到端加密可在插件上传前加一层对称加密(未实现)。
-- 插件通过 Obsidian 的 `requestUrl` 发请求,不受 CORS 限制,桌面端和移动端都可用。
+## 多设备
+
+每台设备装同一插件、填同一后端配置即可。新设备首次同步 = 全量下载,之后增量。
+
+同步语义(两种后端一致):
+
+- 只在本地改 → 上传;只在远端改 → 下载;
+- 删除双向传播(本地删除走系统回收站,可找回);
+- 两端同时改同一文件 → 修改时间较新的一方胜出(修改优先于删除;Gitee 端的远端修改时间取该文件最后一次 commit 时间,仅在真正冲突时才查询);
+- 切换存储后端后,首次同步会因哈希算法不同做一次全量对账(按新者胜规则),数据不会丢,但建议切换前先在原后端同步一次。

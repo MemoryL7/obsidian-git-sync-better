@@ -1,5 +1,5 @@
 import { TFile, Vault } from "obsidian";
-import { RemoteEntry, SyncClient } from "./api";
+import { createBackend, RemoteEntry, StorageBackend } from "./backend";
 import type CloudSyncPlugin from "./main";
 
 export interface SyncSummary {
@@ -14,13 +14,6 @@ interface LocalEntry {
 	file: TFile;
 	hash: string;
 	mtime: number;
-}
-
-async function sha256Hex(data: ArrayBuffer): Promise<string> {
-	const digest = await crypto.subtle.digest("SHA-256", data);
-	return Array.from(new Uint8Array(digest))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("");
 }
 
 /**
@@ -49,15 +42,11 @@ export class SyncEngine {
 	}
 
 	async run(): Promise<SyncSummary> {
-		const { endpoint, token } = this.plugin.settings;
-		if (!endpoint || !token) {
-			throw new Error("请先在插件设置中填写 Worker 地址和 Token");
-		}
-		const client = new SyncClient(endpoint, token);
+		const backend = createBackend(this.plugin.settings);
 
 		const [remoteList, local] = await Promise.all([
-			client.manifest(),
-			this.buildLocalManifest(),
+			backend.manifest(),
+			this.buildLocalManifest(backend),
 		]);
 		const remote = new Map<string, RemoteEntry>(
 			remoteList.filter((e) => !this.isExcluded(e.path)).map((e) => [e.path, e])
@@ -79,21 +68,26 @@ export class SyncEngine {
 			...Object.keys(base).filter((p) => !this.isExcluded(p)),
 		]);
 
-		const push = async (path: string, loc: LocalEntry) => {
+		const push = async (path: string, loc: LocalEntry, rem: RemoteEntry | undefined) => {
 			const data = await this.vault.readBinary(loc.file);
-			await client.upload(path, data, loc.hash, loc.mtime);
+			await backend.upload(path, data, {
+				hash: loc.hash,
+				mtime: loc.mtime,
+				remoteHash: rem?.hash,
+			});
 			nextState[path] = loc.hash;
 			summary.pushed++;
 		};
 		const pull = async (path: string, rem: RemoteEntry) => {
-			const { data, hash, mtime } = await client.download(path);
-			await this.writeLocal(path, data, mtime || rem.mtime);
+			const { data, hash, mtime } = await backend.download(path);
+			const localMtime = await this.writeLocal(path, data, mtime || rem.mtime);
 			const finalHash = hash || rem.hash;
 			nextState[path] = finalHash;
 			this.plugin.hashCache[path] = {
-				mtime: mtime || rem.mtime,
+				mtime: localMtime,
 				size: data.byteLength,
 				hash: finalHash,
+				algo: backend.id,
 			};
 			summary.pulled++;
 		};
@@ -116,9 +110,9 @@ export class SyncEngine {
 
 			if (localChanged && !remoteChanged) {
 				if (loc) {
-					await push(path, loc);
+					await push(path, loc, rem);
 				} else if (rem) {
-					await client.remove(path);
+					await backend.remove(path, rem.hash);
 					summary.deletedRemote++;
 				}
 			} else if (remoteChanged && !localChanged) {
@@ -134,10 +128,11 @@ export class SyncEngine {
 				// a modification beats a deletion.
 				summary.conflicts++;
 				if (loc && rem) {
-					if (loc.mtime >= rem.mtime) await push(path, loc);
+					const remoteMtime = await this.remoteMtime(backend, path, rem);
+					if (loc.mtime >= remoteMtime) await push(path, loc, rem);
 					else await pull(path, rem);
 				} else if (loc) {
-					await push(path, loc);
+					await push(path, loc, rem);
 				} else if (rem) {
 					await pull(path, rem);
 				}
@@ -149,8 +144,21 @@ export class SyncEngine {
 		return summary;
 	}
 
+	private async remoteMtime(
+		backend: StorageBackend,
+		path: string,
+		rem: RemoteEntry
+	): Promise<number> {
+		if (rem.mtime > 0 || !backend.statMtime) return rem.mtime;
+		try {
+			return await backend.statMtime(path);
+		} catch {
+			return 0;
+		}
+	}
+
 	/** Builds { path -> hash } for the vault, reusing cached hashes when mtime+size are unchanged. */
-	private async buildLocalManifest(): Promise<Map<string, LocalEntry>> {
+	private async buildLocalManifest(backend: StorageBackend): Promise<Map<string, LocalEntry>> {
 		const result = new Map<string, LocalEntry>();
 		const cache = this.plugin.hashCache;
 		const seen = new Set<string>();
@@ -160,11 +168,21 @@ export class SyncEngine {
 			seen.add(file.path);
 			const cached = cache[file.path];
 			let hash: string;
-			if (cached && cached.mtime === file.stat.mtime && cached.size === file.stat.size) {
+			if (
+				cached &&
+				cached.algo === backend.id &&
+				cached.mtime === file.stat.mtime &&
+				cached.size === file.stat.size
+			) {
 				hash = cached.hash;
 			} else {
-				hash = await sha256Hex(await this.vault.readBinary(file));
-				cache[file.path] = { mtime: file.stat.mtime, size: file.stat.size, hash };
+				hash = await backend.hashData(await this.vault.readBinary(file));
+				cache[file.path] = {
+					mtime: file.stat.mtime,
+					size: file.stat.size,
+					hash,
+					algo: backend.id,
+				};
 			}
 			result.set(file.path, { file, hash, mtime: file.stat.mtime });
 		}
@@ -175,7 +193,8 @@ export class SyncEngine {
 		return result;
 	}
 
-	private async writeLocal(path: string, data: ArrayBuffer, mtime: number): Promise<void> {
+	/** Writes the file and returns its resulting local mtime (for the hash cache). */
+	private async writeLocal(path: string, data: ArrayBuffer, mtime: number): Promise<number> {
 		const dir = path.split("/").slice(0, -1).join("/");
 		if (dir) await this.ensureFolder(dir);
 		const existing = this.vault.getAbstractFileByPath(path);
@@ -185,6 +204,8 @@ export class SyncEngine {
 		} else {
 			await this.vault.createBinary(path, data, options);
 		}
+		const written = this.vault.getAbstractFileByPath(path);
+		return written instanceof TFile ? written.stat.mtime : mtime;
 	}
 
 	private async ensureFolder(dir: string): Promise<void> {

@@ -6,6 +6,8 @@ interface HashCacheEntry {
 	mtime: number;
 	size: number;
 	hash: string;
+	/** Backend id the hash was computed for; stale entries are recomputed. */
+	algo: string;
 }
 
 interface PluginData {
