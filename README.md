@@ -19,14 +19,14 @@ cd plugin
 npm install
 npm run build        # 产出 main.js
 
-mkdir -p "<你的vault路径>/.obsidian/plugins/cc-obsidian-sync"
-cp main.js manifest.json "<你的vault路径>/.obsidian/plugins/cc-obsidian-sync/"
+mkdir -p "<你的vault路径>/.obsidian/plugins/gitee-sync"
+cp main.js manifest.json "<你的vault路径>/.obsidian/plugins/gitee-sync/"
 ```
 
 Obsidian → 设置 → 第三方插件(关闭安全模式)→ 启用 **Gitee Sync**。
 
 iOS 安装:vault 建在 iCloud,在 Mac 上把上述两个文件拷进
-`~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>/.obsidian/plugins/cc-obsidian-sync/`,等 iCloud 同步后在手机上启用。
+`~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>/.obsidian/plugins/gitee-sync/`,等 iCloud 同步后在手机上启用。
 
 ### 3. 配置
 
@@ -58,5 +58,5 @@ iOS 安装:vault 建在 iCloud,在 Mac 上把上述两个文件拷进
 
 - 首次同步大 vault 会逐文件产生 commit,受平台 API 限流影响会比较慢,跑完一次后都是增量;
 - 免费私有仓库容量:Gitee 建议 500MB 内,GitHub 建议 1GB 内;单文件建议 < 50MB,超大附件放"排除目录";
-- 令牌等于仓库全部权限,存放在 vault 的 `.obsidian/plugins/cc-obsidian-sync/data.json`(该目录不参与同步),用其他工具备份 vault 时注意排除;
+- 令牌等于仓库全部权限,存放在 vault 的 `.obsidian/plugins/gitee-sync/data.json`(该目录不参与同步),用其他工具备份 vault 时注意排除;
 - 若 vault 同时也是指向同一仓库的 git clone,插件接管后不要再手动 `git push`,本地 `.git` 会落后于远端(内容无害,留作备份)。

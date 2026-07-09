@@ -89,7 +89,7 @@ export default class CloudSyncPlugin extends Plugin {
 			const msg = e instanceof Error ? e.message : String(e);
 			this.setStatus("同步:失败");
 			new Notice(`同步失败:${msg}`, 8000);
-			console.error("[cc-obsidian-sync]", e);
+			console.error("[gitee-sync]", e);
 		} finally {
 			this.syncing = false;
 		}
