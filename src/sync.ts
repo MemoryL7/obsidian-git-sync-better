@@ -1,5 +1,6 @@
 import { TFile, Vault } from "obsidian";
 import { createBackend, RemoteEntry, StorageBackend } from "./backend";
+import { formatDateTime, messages } from "./i18n";
 import type CloudSyncPlugin from "./main";
 
 /** Diagnostic log note; excluded from sync so it never travels between devices. */
@@ -67,14 +68,15 @@ export class SyncEngine {
 	async preview(): Promise<{ plan: SyncPlan; report: string }> {
 		const backend = createBackend(this.plugin.settings);
 		const plan = await this.buildPlan(backend);
-		return { plan, report: this.formatPlan(plan, "同步预演(未执行)") };
+		return { plan, report: this.formatPlan(plan, messages().previewTitle) };
 	}
 
 	async run(): Promise<SyncSummary> {
+		const l = messages();
 		const backend = createBackend(this.plugin.settings);
 		const plan = await this.buildPlan(backend);
 		if (this.plugin.settings.debugLog) {
-			await this.plugin.appendLog(this.formatPlan(plan, "同步执行"));
+			await this.plugin.appendLog(this.formatPlan(plan, l.executionTitle));
 		}
 
 		const summary: SyncSummary = {
@@ -90,7 +92,7 @@ export class SyncEngine {
 				await fn();
 			} catch (e) {
 				const msg = e instanceof Error ? e.message : String(e);
-				throw new Error(`处理 "${path}" 失败:${msg}`);
+				throw new Error(l.pathFailed(path, msg));
 			}
 		};
 
@@ -146,8 +148,13 @@ export class SyncEngine {
 			await this.plugin.savePluginData();
 			if (this.plugin.settings.debugLog) {
 				await this.plugin.appendLog(
-					`结果:**失败** — ${e instanceof Error ? e.message : String(e)}\n` +
-						`(已完成:下载 ${summary.pulled},上传 ${summary.pushed},删本地 ${summary.deletedLocal},删远端 ${summary.deletedRemote})\n`
+					l.resultFailed(e instanceof Error ? e.message : String(e)) +
+						l.completedCounts(
+							summary.pulled,
+							summary.pushed,
+							summary.deletedLocal,
+							summary.deletedRemote
+						)
 				);
 			}
 			throw e;
@@ -157,13 +164,20 @@ export class SyncEngine {
 		await this.plugin.savePluginData();
 		if (this.plugin.settings.debugLog) {
 			await this.plugin.appendLog(
-				`结果:成功 — 下载 ${summary.pulled},上传 ${summary.pushed},删本地 ${summary.deletedLocal},删远端 ${summary.deletedRemote},冲突 ${summary.conflicts}\n`
+				l.resultSuccess(
+					summary.pulled,
+					summary.pushed,
+					summary.deletedLocal,
+					summary.deletedRemote,
+					summary.conflicts
+				)
 			);
 		}
 		return summary;
 	}
 
 	private async buildPlan(backend: StorageBackend): Promise<SyncPlan> {
+		const l = messages();
 		const [remoteList, local] = await Promise.all([
 			backend.manifest(),
 			this.buildLocalManifest(backend),
@@ -208,11 +222,22 @@ export class SyncEngine {
 			const isNew = baseHash === undefined;
 
 			if (localChanged && !remoteChanged) {
-				if (loc) plan.pushes.push({ path, loc, rem, reason: isNew ? "本地新增" : "本地修改" });
-				else if (rem) plan.remoteDeletes.push({ path, rem, reason: "本地已删除" });
+				if (loc)
+					plan.pushes.push({
+						path,
+						loc,
+						rem,
+						reason: isNew ? l.reasonLocalAdded : l.reasonLocalModified,
+					});
+				else if (rem) plan.remoteDeletes.push({ path, rem, reason: l.reasonLocalDeleted });
 			} else if (remoteChanged && !localChanged) {
-				if (rem) plan.pulls.push({ path, rem, reason: isNew ? "远端新增" : "远端修改" });
-				else if (loc) plan.localDeletes.push({ path, loc, reason: "远端已删除" });
+				if (rem)
+					plan.pulls.push({
+						path,
+						rem,
+						reason: isNew ? l.reasonRemoteAdded : l.reasonRemoteModified,
+					});
+				else if (loc) plan.localDeletes.push({ path, loc, reason: l.reasonRemoteDeleted });
 			} else {
 				// Both sides changed since the last sync: newer mtime wins;
 				// a modification beats a deletion.
@@ -224,19 +249,19 @@ export class SyncEngine {
 							path,
 							loc,
 							rem,
-							reason: `冲突:本地较新(本地 ${ts(loc.mtime)} ≥ 远端 ${ts(remoteMtime)})`,
+							reason: l.reasonConflictLocalNewer(ts(loc.mtime), ts(remoteMtime)),
 						});
 					} else {
 						plan.pulls.push({
 							path,
 							rem,
-							reason: `冲突:远端较新(远端 ${ts(remoteMtime)} > 本地 ${ts(loc.mtime)})`,
+							reason: l.reasonConflictRemoteNewer(ts(remoteMtime), ts(loc.mtime)),
 						});
 					}
 				} else if (loc) {
-					plan.pushes.push({ path, loc, rem, reason: "冲突:远端已删但本地有修改,保留本地" });
+					plan.pushes.push({ path, loc, rem, reason: l.reasonConflictKeepLocal });
 				} else if (rem) {
-					plan.pulls.push({ path, rem, reason: "冲突:本地已删但远端有修改,保留远端" });
+					plan.pulls.push({ path, rem, reason: l.reasonConflictKeepRemote });
 				}
 			}
 		}
@@ -244,29 +269,46 @@ export class SyncEngine {
 	}
 
 	private formatPlan(plan: SyncPlan, title: string): string {
+		const l = messages();
 		const s = this.plugin.settings;
 		const target =
 			s.backend === "github"
 				? `github ${s.githubOwner}/${s.githubRepo}@${s.githubBranch}`
 				: `gitee ${s.giteeOwner}/${s.giteeRepo}@${s.giteeBranch}`;
 		const lines: string[] = [];
-		lines.push(`\n## ${title} ${new Date().toLocaleString()}`);
+		lines.push(`\n## ${title} ${formatDateTime()}`);
 		lines.push(
-			`后端:${target}\n` +
-				`本地 ${plan.localCount} | 远端 ${plan.remoteCount} | **基线 ${plan.baseCount}** | 一致跳过 ${plan.unchanged} | 冲突 ${plan.conflicts}`
+			l.planBackend(target) +
+				"\n" +
+				l.planCounts(
+					plan.localCount,
+					plan.remoteCount,
+					plan.baseCount,
+					plan.unchanged,
+					plan.conflicts
+				)
 		);
 		const total =
 			plan.pulls.length + plan.pushes.length + plan.localDeletes.length + plan.remoteDeletes.length;
 		if (total === 0) {
-			lines.push("计划:两端已一致,无需任何动作");
+			lines.push(l.planNoActions);
 		} else {
 			lines.push(
-				`计划:下载 ${plan.pulls.length},上传 ${plan.pushes.length},删本地 ${plan.localDeletes.length},删远端 ${plan.remoteDeletes.length}`
+				l.planActions(
+					plan.pulls.length,
+					plan.pushes.length,
+					plan.localDeletes.length,
+					plan.remoteDeletes.length
+				)
 			);
-			for (const a of plan.pulls) lines.push(`- ⬇️ 下载 \`${a.path}\` — ${a.reason}`);
-			for (const a of plan.localDeletes) lines.push(`- 🗑️ 删本地 \`${a.path}\` — ${a.reason}`);
-			for (const a of plan.pushes) lines.push(`- ⬆️ 上传 \`${a.path}\` — ${a.reason}`);
-			for (const a of plan.remoteDeletes) lines.push(`- ❌ 删远端 \`${a.path}\` — ${a.reason}`);
+			for (const a of plan.pulls)
+				lines.push(`- ⬇️ ${l.actionDownload} \`${a.path}\` — ${a.reason}`);
+			for (const a of plan.localDeletes)
+				lines.push(`- 🗑️ ${l.actionDeleteLocal} \`${a.path}\` — ${a.reason}`);
+			for (const a of plan.pushes)
+				lines.push(`- ⬆️ ${l.actionUpload} \`${a.path}\` — ${a.reason}`);
+			for (const a of plan.remoteDeletes)
+				lines.push(`- ❌ ${l.actionDeleteRemote} \`${a.path}\` — ${a.reason}`);
 		}
 		return lines.join("\n") + "\n";
 	}
@@ -352,5 +394,5 @@ export class SyncEngine {
 }
 
 function ts(ms: number): string {
-	return ms > 0 ? new Date(ms).toLocaleString() : "未知";
+	return ms > 0 ? formatDateTime(new Date(ms)) : messages().unknown;
 }

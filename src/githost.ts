@@ -1,5 +1,6 @@
 import { arrayBufferToBase64, base64ToArrayBuffer, requestUrl, RequestUrlResponse } from "obsidian";
 import type { RemoteEntry, StorageBackend } from "./backend";
+import { messages } from "./i18n";
 
 export type GitHost = "gitee" | "github";
 
@@ -86,16 +87,14 @@ export class GitHostBackend implements StorageBackend {
 			body: payload ? JSON.stringify(payload) : undefined,
 		});
 		if (resp.status >= 400) {
+			const l = messages();
 			let detail = "";
 			try {
 				detail = (resp.json as { message?: string }).message ?? "";
 			} catch {
 				detail = resp.text.slice(0, 200);
 			}
-			throw new GitHostError(
-				resp.status,
-				`${this.cfg.host} API ${method} 失败 (${resp.status}): ${detail}`
-			);
+			throw new GitHostError(resp.status, l.apiFailed(this.cfg.host, method, resp.status, detail));
 		}
 		return resp;
 	}
@@ -118,7 +117,7 @@ export class GitHostBackend implements StorageBackend {
 		};
 		if (body.truncated) {
 			// An incomplete manifest would be read as mass remote deletions — refuse to sync.
-			throw new Error("远端返回的文件树被截断(文件数过多),中止同步以防误删");
+			throw new Error(messages().remoteTreeTruncated);
 		}
 		return body.tree
 			.filter((t) => t.type === "blob")
@@ -148,7 +147,7 @@ export class GitHostBackend implements StorageBackend {
 		const url = `${this.repoBase}/contents/${encodePath(path)}`;
 		const body: Record<string, unknown> = {
 			content: arrayBufferToBase64(data),
-			message: `sync: ${opts.remoteHash ? "update" : "add"} ${path}`,
+			message: opts.remoteHash ? messages().commitUpdate(path) : messages().commitAdd(path),
 			branch: this.cfg.branch,
 		};
 		if (opts.remoteHash) body.sha = opts.remoteHash;
@@ -157,9 +156,9 @@ export class GitHostBackend implements StorageBackend {
 	}
 
 	async remove(path: string, remoteHash?: string): Promise<void> {
-		if (!remoteHash) throw new Error(`删除 ${path} 需要远端 sha`);
+		if (!remoteHash) throw new Error(messages().deleteNeedsSha(path));
 		const url = `${this.repoBase}/contents/${encodePath(path)}`;
-		const message = `sync: delete ${path}`;
+		const message = messages().commitDelete(path);
 		if (this.isGithub) {
 			await this.request("DELETE", url, {
 				message,

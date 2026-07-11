@@ -1,4 +1,5 @@
 import { Notice, Plugin } from "obsidian";
+import { formatDateTime, formatTime, messages } from "./i18n";
 import { DEFAULT_SETTINGS, SyncSettings, SyncSettingTab } from "./settings";
 import { LOG_FILE, SyncEngine, SyncSummary } from "./sync";
 
@@ -31,23 +32,24 @@ export default class CloudSyncPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadPluginData();
+		const l = messages();
 
 		this.addSettingTab(new SyncSettingTab(this.app, this));
 		this.statusBar = this.addStatusBarItem();
 		this.statusBar.addClass("mod-clickable");
-		this.statusBar.setAttribute("aria-label", "点击同步到远端仓库");
+		this.statusBar.setAttribute("aria-label", l.clickToSync);
 		this.statusBar.addEventListener("click", () => void this.runSync());
-		this.setStatus("同步:空闲");
+		this.setStatus(l.statusIdle);
 
-		this.addRibbonIcon("refresh-cw", "同步到远端仓库", () => void this.runSync());
+		this.addRibbonIcon("refresh-cw", l.ribbonSync, () => void this.runSync());
 		this.addCommand({
 			id: "sync-now",
-			name: "立即同步",
+			name: l.commandSyncNow,
 			callback: () => void this.runSync(),
 		});
 		this.addCommand({
 			id: "sync-preview",
-			name: "预览同步计划(不执行,结果写入日志笔记)",
+			name: l.commandPreview,
 			callback: () => void this.runPreview(),
 		});
 
@@ -81,15 +83,16 @@ export default class CloudSyncPlugin extends Plugin {
 	}
 
 	async runSync(silent = false): Promise<void> {
+		const l = messages();
 		if (this.syncing) {
-			if (!silent) new Notice("同步正在进行中");
+			if (!silent) new Notice(l.syncInProgress);
 			return;
 		}
 		this.syncing = true;
-		this.setStatus("同步:进行中…");
+		this.setStatus(l.statusRunning);
 		try {
 			const summary = await new SyncEngine(this).run();
-			this.setStatus(`同步:${new Date().toLocaleTimeString()} 完成`);
+			this.setStatus(l.statusComplete(formatTime()));
 			const changed =
 				summary.pushed + summary.pulled + summary.deletedLocal + summary.deletedRemote;
 			if (!silent || changed > 0) {
@@ -97,8 +100,8 @@ export default class CloudSyncPlugin extends Plugin {
 			}
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
-			this.setStatus("同步:失败");
-			new Notice(`同步失败:${msg}`, 8000);
+			this.setStatus(l.statusFailed);
+			new Notice(l.syncFailed(msg), 8000);
 			console.error("[gitee-sync]", e);
 		} finally {
 			this.syncing = false;
@@ -106,22 +109,28 @@ export default class CloudSyncPlugin extends Plugin {
 	}
 
 	async runPreview(): Promise<void> {
+		const l = messages();
 		if (this.syncing) {
-			new Notice("同步正在进行中,请稍后再预览");
+			new Notice(l.previewWhileSyncing);
 			return;
 		}
 		try {
 			const { plan, report } = await new SyncEngine(this).preview();
 			await this.appendLog(report);
 			new Notice(
-				`预演完成:下载 ${plan.pulls.length},上传 ${plan.pushes.length},` +
-					`删本地 ${plan.localDeletes.length},删远端 ${plan.remoteDeletes.length}(详见 ${LOG_FILE})`
+				l.previewComplete(
+					plan.pulls.length,
+					plan.pushes.length,
+					plan.localDeletes.length,
+					plan.remoteDeletes.length,
+					LOG_FILE
+				)
 			);
 			await this.app.workspace.openLinkText(LOG_FILE, "", true);
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
-			new Notice(`预演失败:${msg}`, 8000);
-			await this.appendLog(`\n## 同步预演失败 ${new Date().toLocaleString()}\n${msg}\n`);
+			new Notice(l.previewFailed(msg), 8000);
+			await this.appendLog(l.previewFailedLog(formatDateTime(), msg));
 		}
 	}
 
@@ -129,19 +138,20 @@ export default class CloudSyncPlugin extends Plugin {
 	async appendLog(text: string): Promise<void> {
 		const adapter = this.app.vault.adapter;
 		if (!(await adapter.exists(LOG_FILE))) {
-			await adapter.write(LOG_FILE, "# Gitee Sync 诊断日志\n");
+			await adapter.write(LOG_FILE, messages().diagnosticLogTitle);
 		}
 		await adapter.append(LOG_FILE, text);
 	}
 
 	private formatSummary(s: SyncSummary): string {
+		const l = messages();
 		const parts: string[] = [];
-		if (s.pushed) parts.push(`上传 ${s.pushed}`);
-		if (s.pulled) parts.push(`下载 ${s.pulled}`);
-		if (s.deletedRemote) parts.push(`删除远端 ${s.deletedRemote}`);
-		if (s.deletedLocal) parts.push(`删除本地 ${s.deletedLocal}`);
-		if (s.conflicts) parts.push(`冲突(按较新版本处理)${s.conflicts}`);
-		return parts.length ? `同步完成:${parts.join(",")}` : "同步完成:无变化";
+		if (s.pushed) parts.push(l.summaryUpload(s.pushed));
+		if (s.pulled) parts.push(l.summaryDownload(s.pulled));
+		if (s.deletedRemote) parts.push(l.summaryDeleteRemote(s.deletedRemote));
+		if (s.deletedLocal) parts.push(l.summaryDeleteLocal(s.deletedLocal));
+		if (s.conflicts) parts.push(l.summaryConflict(s.conflicts));
+		return parts.length ? l.summaryComplete(parts.join(", ")) : l.summaryNoChanges;
 	}
 
 	private setStatus(text: string): void {

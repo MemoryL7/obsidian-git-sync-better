@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
+import { messages } from "./i18n";
 import type CloudSyncPlugin from "./main";
 
 export type BackendType = "gitee" | "github";
@@ -46,16 +47,17 @@ export class SyncSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		const l = messages();
 		const s = this.plugin.settings;
 		const save = () => this.plugin.savePluginData();
 
 		new Setting(containerEl)
-			.setName("存储后端")
-			.setDesc("切换后端后,首次同步会对两边差异做一次全量对账(按修改时间较新一方为准)")
+			.setName(l.settingsBackend)
+			.setDesc(l.settingsBackendDesc)
 			.addDropdown((d) =>
 				d
-					.addOption("gitee", "Gitee 仓库")
-					.addOption("github", "GitHub 仓库")
+					.addOption("gitee", l.optionGitee)
+					.addOption("github", l.optionGithub)
 					.setValue(s.backend)
 					.onChange(async (v) => {
 						s.backend = v as BackendType;
@@ -66,8 +68,8 @@ export class SyncSettingTab extends PluginSettingTab {
 
 		if (s.backend === "gitee") {
 			new Setting(containerEl)
-				.setName("Gitee 用户名")
-				.setDesc("仓库所属的用户名或组织名(即仓库 URL 中的 owner)")
+				.setName(l.settingsGiteeOwner)
+				.setDesc(l.settingsOwnerDesc)
 				.addText((t) =>
 					t.setPlaceholder("your-name").setValue(s.giteeOwner).onChange(async (v) => {
 						s.giteeOwner = v.trim();
@@ -76,8 +78,8 @@ export class SyncSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("仓库名")
-				.setDesc("建议使用一个专门的私有仓库")
+				.setName(l.settingsRepo)
+				.setDesc(l.settingsRepoDesc)
 				.addText((t) =>
 					t.setPlaceholder("obsidian-vault").setValue(s.giteeRepo).onChange(async (v) => {
 						s.giteeRepo = v.trim();
@@ -86,7 +88,7 @@ export class SyncSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("分支")
+				.setName(l.settingsBranch)
 				.addText((t) =>
 					t.setPlaceholder("master").setValue(s.giteeBranch).onChange(async (v) => {
 						s.giteeBranch = v.trim() || "master";
@@ -95,8 +97,8 @@ export class SyncSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("私人令牌")
-				.setDesc("Gitee 设置 → 安全设置 → 私人令牌,需勾选 projects 权限")
+				.setName(l.settingsGiteeToken)
+				.setDesc(l.settingsGiteeTokenDesc)
 				.addText((t) => {
 					t.inputEl.type = "password";
 					t.setValue(s.giteeToken).onChange(async (v) => {
@@ -106,8 +108,8 @@ export class SyncSettingTab extends PluginSettingTab {
 				});
 		} else {
 			new Setting(containerEl)
-				.setName("GitHub 用户名")
-				.setDesc("仓库所属的用户名或组织名(即仓库 URL 中的 owner)")
+				.setName(l.settingsGithubOwner)
+				.setDesc(l.settingsOwnerDesc)
 				.addText((t) =>
 					t.setPlaceholder("your-name").setValue(s.githubOwner).onChange(async (v) => {
 						s.githubOwner = v.trim();
@@ -116,8 +118,8 @@ export class SyncSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("仓库名")
-				.setDesc("建议使用一个专门的私有仓库")
+				.setName(l.settingsRepo)
+				.setDesc(l.settingsRepoDesc)
 				.addText((t) =>
 					t.setPlaceholder("obsidian-vault").setValue(s.githubRepo).onChange(async (v) => {
 						s.githubRepo = v.trim();
@@ -126,7 +128,7 @@ export class SyncSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("分支")
+				.setName(l.settingsBranch)
 				.addText((t) =>
 					t.setPlaceholder("main").setValue(s.githubBranch).onChange(async (v) => {
 						s.githubBranch = v.trim() || "main";
@@ -135,11 +137,8 @@ export class SyncSettingTab extends PluginSettingTab {
 				);
 
 			new Setting(containerEl)
-				.setName("访问令牌")
-				.setDesc(
-					"GitHub Settings → Developer settings → Personal access tokens;" +
-						"fine-grained 令牌需授予目标仓库 Contents 读写权限(classic 令牌勾选 repo)"
-				)
+				.setName(l.settingsGithubToken)
+				.setDesc(l.settingsGithubTokenDesc)
 				.addText((t) => {
 					t.inputEl.type = "password";
 					t.setValue(s.githubToken).onChange(async (v) => {
@@ -150,8 +149,8 @@ export class SyncSettingTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
-			.setName("自动同步间隔(分钟)")
-			.setDesc("0 表示关闭自动同步")
+			.setName(l.settingsAutoSync)
+			.setDesc(l.settingsAutoSyncDesc)
 			.addText((t) =>
 				t.setValue(String(s.autoSyncMinutes)).onChange(async (v) => {
 					const n = Number(v);
@@ -162,8 +161,8 @@ export class SyncSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("启动时同步")
-			.setDesc("Obsidian 打开后自动执行一次同步")
+			.setName(l.settingsSyncOnStart)
+			.setDesc(l.settingsSyncOnStartDesc)
 			.addToggle((t) =>
 				t.setValue(s.syncOnStart).onChange(async (v) => {
 					s.syncOnStart = v;
@@ -172,8 +171,8 @@ export class SyncSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("排除目录")
-			.setDesc("逗号分隔的目录前缀,这些目录不参与同步,例如:templates, attachments/cache")
+			.setName(l.settingsExcludeFolders)
+			.setDesc(l.settingsExcludeFoldersDesc)
 			.addText((t) =>
 				t.setValue(s.excludeFolders).onChange(async (v) => {
 					s.excludeFolders = v;
@@ -182,8 +181,8 @@ export class SyncSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("调试日志")
-			.setDesc("把每次同步的完整计划和结果记录到 vault 根目录的 _gitee-sync-log.md(该文件不参与同步)")
+			.setName(l.settingsDebugLog)
+			.setDesc(l.settingsDebugLogDesc)
 			.addToggle((t) =>
 				t.setValue(s.debugLog).onChange(async (v) => {
 					s.debugLog = v;

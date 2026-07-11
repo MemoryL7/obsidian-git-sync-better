@@ -1,5 +1,6 @@
 import type { SyncSettings } from "./settings";
 import { GitHostBackend } from "./githost";
+import { messages } from "./i18n";
 
 export interface RemoteEntry {
 	path: string;
@@ -33,7 +34,7 @@ export interface StorageBackend {
 export function createBackend(s: SyncSettings): StorageBackend {
 	if (s.backend === "github") {
 		if (!s.githubOwner || !s.githubRepo || !s.githubToken) {
-			throw new Error("请先在设置中填写 GitHub 用户名、仓库名和访问令牌");
+			throw new Error(messages().missingGithubSettings);
 		}
 		return new GitHostBackend({
 			host: "github",
@@ -44,7 +45,7 @@ export function createBackend(s: SyncSettings): StorageBackend {
 		});
 	}
 	if (!s.giteeOwner || !s.giteeRepo || !s.giteeToken) {
-		throw new Error("请先在设置中填写 Gitee 用户名、仓库名和私人令牌");
+		throw new Error(messages().missingGiteeSettings);
 	}
 	return new GitHostBackend({
 		host: "gitee",
