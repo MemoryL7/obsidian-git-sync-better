@@ -12,11 +12,13 @@ interface HashCacheEntry {
 
 interface PluginData {
 	settings: SyncSettings;
-	/** path -> content hash agreed at the last successful sync (three-way merge base). */
-	syncState: Record<string, string>;
 	/** path -> hash keyed by mtime+size, to avoid re-hashing unchanged files. */
 	hashCache: Record<string, HashCacheEntry>;
 }
+
+// This must not live in data.json: the vault (and therefore data.json) may be
+// synced by iCloud between devices, but the three-way merge base is device-local.
+const LOCAL_SYNC_STATE_KEY = "gitee-sync-sync-state-v1";
 
 export default class CloudSyncPlugin extends Plugin {
 	settings: SyncSettings = { ...DEFAULT_SETTINGS };
@@ -119,16 +121,14 @@ export default class CloudSyncPlugin extends Plugin {
 		if (this.settings.backend !== "gitee" && this.settings.backend !== "github") {
 			this.settings.backend = "gitee";
 		}
-		this.syncState = data?.syncState ?? {};
+		this.syncState =
+			(this.app.loadLocalStorage(LOCAL_SYNC_STATE_KEY) as Record<string, string> | null) ?? {};
 		this.hashCache = data?.hashCache ?? {};
 	}
 
 	async savePluginData(): Promise<void> {
-		const data: PluginData = {
-			settings: this.settings,
-			syncState: this.syncState,
-			hashCache: this.hashCache,
-		};
+		this.app.saveLocalStorage(LOCAL_SYNC_STATE_KEY, this.syncState);
+		const data: PluginData = { settings: this.settings, hashCache: this.hashCache };
 		await this.saveData(data);
 	}
 }

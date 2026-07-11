@@ -59,4 +59,5 @@ iOS 安装:vault 建在 iCloud,在 Mac 上把上述两个文件拷进
 - 首次同步大 vault 会逐文件产生 commit,受平台 API 限流影响会比较慢,跑完一次后都是增量;
 - 免费私有仓库容量:Gitee 建议 500MB 内,GitHub 建议 1GB 内;单文件建议 < 50MB,超大附件放"排除目录";
 - 令牌等于仓库全部权限,存放在 vault 的 `.obsidian/plugins/gitee-sync/data.json`(该目录不参与同步),用其他工具备份 vault 时注意排除;
+- 每台设备单独保存同步基线,避免 iCloud 同步插件数据时把尚未落地的文件误判为本地删除;
 - 若 vault 同时也是指向同一仓库的 git clone,插件接管后不要再手动 `git push`,本地 `.git` 会落后于远端(内容无害,留作备份)。
