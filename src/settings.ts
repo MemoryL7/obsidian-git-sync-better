@@ -19,6 +19,7 @@ export interface SyncSettings {
 	autoSyncMinutes: number;
 	syncOnStart: boolean;
 	excludeFolders: string;
+	debugLog: boolean;
 }
 
 export const DEFAULT_SETTINGS: SyncSettings = {
@@ -34,6 +35,7 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	autoSyncMinutes: 0,
 	syncOnStart: false,
 	excludeFolders: "",
+	debugLog: false,
 };
 
 export class SyncSettingTab extends PluginSettingTab {
@@ -175,6 +177,16 @@ export class SyncSettingTab extends PluginSettingTab {
 			.addText((t) =>
 				t.setValue(s.excludeFolders).onChange(async (v) => {
 					s.excludeFolders = v;
+					await save();
+				})
+			);
+
+		new Setting(containerEl)
+			.setName("调试日志")
+			.setDesc("把每次同步的完整计划和结果记录到 vault 根目录的 _gitee-sync-log.md(该文件不参与同步)")
+			.addToggle((t) =>
+				t.setValue(s.debugLog).onChange(async (v) => {
+					s.debugLog = v;
 					await save();
 				})
 			);

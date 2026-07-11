@@ -1,6 +1,6 @@
 import { Notice, Plugin } from "obsidian";
 import { DEFAULT_SETTINGS, SyncSettings, SyncSettingTab } from "./settings";
-import { SyncEngine, SyncSummary } from "./sync";
+import { LOG_FILE, SyncEngine, SyncSummary } from "./sync";
 
 interface HashCacheEntry {
 	mtime: number;
@@ -44,6 +44,11 @@ export default class CloudSyncPlugin extends Plugin {
 			id: "sync-now",
 			name: "立即同步",
 			callback: () => void this.runSync(),
+		});
+		this.addCommand({
+			id: "sync-preview",
+			name: "预览同步计划(不执行,结果写入日志笔记)",
+			callback: () => void this.runPreview(),
 		});
 
 		this.setupAutoSync();
@@ -98,6 +103,35 @@ export default class CloudSyncPlugin extends Plugin {
 		} finally {
 			this.syncing = false;
 		}
+	}
+
+	async runPreview(): Promise<void> {
+		if (this.syncing) {
+			new Notice("同步正在进行中,请稍后再预览");
+			return;
+		}
+		try {
+			const { plan, report } = await new SyncEngine(this).preview();
+			await this.appendLog(report);
+			new Notice(
+				`预演完成:下载 ${plan.pulls.length},上传 ${plan.pushes.length},` +
+					`删本地 ${plan.localDeletes.length},删远端 ${plan.remoteDeletes.length}(详见 ${LOG_FILE})`
+			);
+			await this.app.workspace.openLinkText(LOG_FILE, "", true);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			new Notice(`预演失败:${msg}`, 8000);
+			await this.appendLog(`\n## 同步预演失败 ${new Date().toLocaleString()}\n${msg}\n`);
+		}
+	}
+
+	/** Appends to the diagnostic note (which is itself excluded from sync). */
+	async appendLog(text: string): Promise<void> {
+		const adapter = this.app.vault.adapter;
+		if (!(await adapter.exists(LOG_FILE))) {
+			await adapter.write(LOG_FILE, "# Gitee Sync 诊断日志\n");
+		}
+		await adapter.append(LOG_FILE, text);
 	}
 
 	private formatSummary(s: SyncSummary): string {
