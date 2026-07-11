@@ -1,63 +1,143 @@
-# cc-obsidian-syn
+# Gitee Sync
 
-Obsidian vault 同步插件,把笔记以普通文件形式存进 **Gitee 或 GitHub 仓库**(私有仓库免费,自带完整历史版本),插件直连平台 OpenAPI,**无需任何服务端、无需安装 git**,桌面端与移动端(iOS/Android)均可用。
+[English](#english) | [中文](#中文)
 
-同步引擎:基于内容哈希(git blob SHA-1,与平台服务端天然一致)的**三方对比增量同步**(本地清单 / 远端清单 / 上次同步基线),支持双向同步、删除同步;两端同时改动时按修改时间"新者胜"。每次文件增删改对应仓库一次 commit,误删/误改可在仓库网页找回任意旧版本。
+## English
 
-## 安装
+Gitee Sync stores an Obsidian vault as ordinary files in a private **Gitee or GitHub repository**. It connects directly to the platform API, requires no server or local Git installation, and works on desktop, iOS, and Android.
 
-### 1. 准备仓库和令牌
+The sync engine uses Git blob hashes and a three-way comparison between the local vault, remote repository, and the last successful device-local baseline. It supports incremental two-way sync, deletion propagation, conflict resolution, dry-run previews, and diagnostic logs. When both sides modify the same file, the newer modification wins.
 
-**Gitee**:新建私有仓库(空仓库即可,首次同步自动初始化);头像 → 设置 → 安全设置 → **私人令牌**,勾选 **projects** 权限。
+The plugin interface automatically follows Obsidian's language and currently supports English and Chinese.
 
-**GitHub**:新建私有仓库;Settings → Developer settings → **Personal access tokens**,fine-grained 令牌授予目标仓库 **Contents 读写**权限(classic 令牌勾选 repo)。
+### Installation
 
-### 2. 构建并安装插件
+In Obsidian, open **Settings → Community plugins → Browse**, search for **Gitee Sync**, install it, and enable it.
+
+For local development builds:
 
 ```bash
-# 在仓库根目录
 npm install
-npm run build        # 产出 main.js
+npm run build
 
-mkdir -p "<你的vault路径>/.obsidian/plugins/gitee-sync"
-cp main.js manifest.json "<你的vault路径>/.obsidian/plugins/gitee-sync/"
+mkdir -p "<vault>/.obsidian/plugins/gitee-sync"
+cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
 ```
 
-Obsidian → 设置 → 第三方插件(关闭安全模式)→ 启用 **Gitee Sync**。
+### Repository and token
 
-iOS 安装:vault 建在 iCloud,在 Mac 上把上述两个文件拷进
-`~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>/.obsidian/plugins/gitee-sync/`,等 iCloud 同步后在手机上启用。
+**Gitee:** Create a private repository. In **Settings → Security Settings → Personal access tokens**, create a token with the **projects** permission.
 
-### 3. 配置
+**GitHub:** Create a private repository. A fine-grained personal access token needs **Contents: Read and write** access to the repository; a classic token needs the `repo` scope.
+
+### Configuration
+
+| Setting | Description |
+|---|---|
+| Storage backend | Gitee repository or GitHub repository |
+| Owner | User or organization from the repository URL |
+| Repository | Private repository used for the vault |
+| Branch | Gitee defaults to `master`; GitHub defaults to `main` |
+| Token | Personal access token for the selected platform |
+| Automatic sync interval | Minutes between syncs; `0` disables automatic sync |
+| Sync on startup | Runs one sync when Obsidian opens |
+| Excluded folders | Comma-separated folder prefixes that are not synced |
+| Diagnostic log | Writes the sync plan and result to `_gitee-sync-log.md` |
+
+Trigger sync from the ribbon icon, the **Sync now** command, the status bar, the timer, or startup sync. Use **Preview sync plan** to inspect planned actions without changing either side.
+
+### Multiple devices
+
+Install and configure the plugin on every device with the same repository. Each device keeps its own sync baseline. A new device downloads the remote vault on its first sync and uses incremental sync afterwards.
+
+Mobile operating systems suspend timers in the background, so enabling **Sync on startup** is recommended.
+
+### iOS file visibility
+
+If a downloaded folder is visible but a file with a non-standard extension is not, open **Settings → Files and links** and enable **Detect all file extensions**. The file may already be present but hidden by Obsidian's file explorer.
+
+### Sync behavior
+
+- Local-only changes are uploaded; remote-only changes are downloaded.
+- Deletions propagate in both directions. Local deletions use Obsidian's trash, and remote history remains recoverable through Git.
+- If both sides modify the same file, the newer modification wins. A modification wins over a deletion.
+- Hidden paths such as `.obsidian` and `.git` are ignored on both sides.
+- Sync stops if the remote platform returns a truncated file tree, preventing accidental mass deletion.
+- Every uploaded or deleted file creates a repository commit, so previous versions remain recoverable.
+
+### Limitations and security
+
+- The first sync of a large vault creates one commit per file and may be limited by platform API quotas.
+- Keep large attachments in an excluded folder. Individual files should preferably remain below 50 MB.
+- Tokens are stored in `.obsidian/plugins/gitee-sync/data.json`. Exclude this file when backing up the vault with other tools.
+- Do not manually push the same vault to the same repository while the plugin manages it.
+
+## 中文
+
+Gitee Sync 将 Obsidian vault 中的笔记以普通文件形式保存到私有 **Gitee 或 GitHub 仓库**。插件直接连接平台 API，无需服务器或本地安装 Git，并支持桌面端、iOS 和 Android。
+
+同步引擎使用 Git blob 内容哈希，对本地 vault、远端仓库和每台设备上次成功同步的基线进行三方比较。支持双向增量同步、删除同步、冲突处理、同步预演和诊断日志。两端同时修改同一文件时，保留修改时间较新的版本。
+
+插件界面会自动跟随 Obsidian 的语言，目前支持中文和英语。
+
+### 安装
+
+在 Obsidian 中打开 **设置 → 第三方插件 → 浏览**，搜索 **Gitee Sync**，安装并启用插件。
+
+本地开发版本可手动构建安装：
+
+```bash
+npm install
+npm run build
+
+mkdir -p "<vault>/.obsidian/plugins/gitee-sync"
+cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
+```
+
+### 仓库和令牌
+
+**Gitee：** 创建私有仓库，然后在 **设置 → 安全设置 → 私人令牌** 中创建令牌，并勾选 **projects** 权限。
+
+**GitHub：** 创建私有仓库。Fine-grained token 需要目标仓库的 **Contents: Read and write** 权限；classic token 需要勾选 `repo`。
+
+### 配置
 
 | 设置项 | 说明 |
 |---|---|
-| 存储后端 | Gitee 仓库 / GitHub 仓库 |
-| 用户名 | 仓库 URL 中的 owner |
-| 仓库名 | 上面创建的私有仓库 |
-| 分支 | Gitee 默认 master,GitHub 默认 main |
-| 令牌 | 上面生成的 token |
-| 自动同步间隔 | 分钟数,0 = 关闭 |
-| 排除目录 | 逗号分隔目录前缀,不参与同步 |
+| 存储后端 | Gitee 仓库或 GitHub 仓库 |
+| 用户名 | 仓库 URL 中的用户或组织名 |
+| 仓库名 | 用于保存 vault 的私有仓库 |
+| 分支 | Gitee 默认 `master`，GitHub 默认 `main` |
+| 令牌 | 对应平台的私人访问令牌 |
+| 自动同步间隔 | 同步间隔分钟数，`0` 表示关闭 |
+| 启动时同步 | Obsidian 打开后执行一次同步 |
+| 排除目录 | 逗号分隔、不参与同步的目录前缀 |
+| 调试日志 | 将同步计划和结果写入 `_gitee-sync-log.md` |
 
-触发方式:ribbon 刷新图标 / 命令面板"立即同步" / 定时 / 启动时同步。
+可通过侧边栏同步图标、命令面板中的 **立即同步**、状态栏、定时器或启动时同步触发。使用 **预览同步计划** 可以在不修改两端文件的情况下检查计划动作。
 
-## 多设备
+### 多设备
 
-每台设备装同一插件、填同一仓库配置即可。新设备首次同步 = 全量下载,之后增量。移动端切后台后定时器会被系统挂起,建议开"启动时同步"。
+在每台设备安装插件并配置同一仓库。每台设备分别保存同步基线。新设备首次同步会下载远端 vault，之后只进行增量同步。
 
-## 同步语义
+移动端进入后台后，系统可能暂停定时器，建议开启 **启动时同步**。
 
-- 只在本地改 → 上传;只在远端改 → 下载;
-- 删除双向传播(本地删除进回收站,可找回;远端删除有 git 历史);
-- 两端同时改同一文件 → 修改时间较新的一方胜出(修改优先于删除;远端修改时间取该文件最后一次 commit 时间,仅在真正冲突时查询);
-- 隐藏路径(`.obsidian`、`.git` 等)在两侧都被忽略,不参与同步;
-- 远端文件树被截断(超大仓库)时中止同步,防止误判为批量删除。
+### iOS 文件显示
 
-## 限制
+如果同步后能看到新目录，却看不到某些非标准扩展名文件，请打开 **设置 → 文件与链接 → 检测所有文件扩展名**。文件可能已经下载，只是被 Obsidian 文件列表隐藏。
 
-- 首次同步大 vault 会逐文件产生 commit,受平台 API 限流影响会比较慢,跑完一次后都是增量;
-- 免费私有仓库容量:Gitee 建议 500MB 内,GitHub 建议 1GB 内;单文件建议 < 50MB,超大附件放"排除目录";
-- 令牌等于仓库全部权限,存放在 vault 的 `.obsidian/plugins/gitee-sync/data.json`(该目录不参与同步),用其他工具备份 vault 时注意排除;
-- 每台设备单独保存同步基线,避免 iCloud 同步插件数据时把尚未落地的文件误判为本地删除;
-- 若 vault 同时也是指向同一仓库的 git clone,插件接管后不要再手动 `git push`,本地 `.git` 会落后于远端(内容无害,留作备份)。
+### 同步规则
+
+- 只在本地修改的文件会上传，只在远端修改的文件会下载。
+- 删除会双向传播。本地删除进入 Obsidian 回收站，远端文件仍可通过 Git 历史恢复。
+- 两端同时修改同一文件时，保留修改时间较新的版本；修改优先于删除。
+- `.obsidian`、`.git` 等隐藏路径在两端都会被忽略。
+- 远端平台返回被截断的文件树时会中止同步，避免误判为批量删除。
+- 每次文件上传或删除都会生成仓库 commit，旧版本可随时恢复。
+
+### 限制与安全
+
+- 大型 vault 首次同步会逐文件生成 commit，可能受到平台 API 限流影响。
+- 建议将大附件放入排除目录，单文件尽量保持在 50 MB 以下。
+- 令牌存放在 `.obsidian/plugins/gitee-sync/data.json`，使用其他工具备份 vault 时请排除此文件。
+- 插件管理仓库后，不要同时把同一个 vault 手动推送到相同仓库。
