@@ -24,6 +24,7 @@ const en = {
 	summaryDeleteRemote: (count: number) => `deleted remote ${count}`,
 	summaryDeleteLocal: (count: number) => `deleted local ${count}`,
 	summaryConflict: (count: number) => `conflicts (newer version won) ${count}`,
+	summarySkippedEmpty: (count: number) => `skipped empty files ${count}`,
 	summaryComplete: (parts: string) => `Sync complete: ${parts}`,
 	summaryNoChanges: "Sync complete: no changes",
 
@@ -98,6 +99,8 @@ const en = {
 	actionDeleteLocal: "Delete local",
 	actionUpload: "Upload",
 	actionDeleteRemote: "Delete remote",
+	actionSkipEmpty: "Skip",
+	reasonEmptyFile: "Empty file — the contents API cannot create it",
 	unknown: "Unknown",
 };
 
@@ -124,6 +127,7 @@ const zh: typeof en = {
 	summaryDeleteRemote: (count) => `删除远端 ${count}`,
 	summaryDeleteLocal: (count) => `删除本地 ${count}`,
 	summaryConflict: (count) => `冲突（按较新版本处理）${count}`,
+	summarySkippedEmpty: (count) => `跳过空文件 ${count} 个`,
 	summaryComplete: (parts) => `同步完成：${parts}`,
 	summaryNoChanges: "同步完成：无变化",
 
@@ -191,6 +195,8 @@ const zh: typeof en = {
 	actionDeleteLocal: "删除本地",
 	actionUpload: "上传",
 	actionDeleteRemote: "删除远端",
+	actionSkipEmpty: "跳过",
+	reasonEmptyFile: "空文件——contents API 无法创建",
 	unknown: "未知",
 };
 

@@ -62,6 +62,7 @@ If a downloaded folder is visible but a file with a non-standard extension is no
 - Deletions propagate in both directions. Local deletions use Obsidian's trash, and remote history remains recoverable through Git.
 - If both sides modify the same file, the newer modification wins. A modification wins over a deletion.
 - Hidden paths such as `.obsidian` and `.git` are ignored on both sides.
+- Empty files (0 bytes) are skipped: the Gitee/GitHub contents APIs cannot create them.
 - Sync stops if the remote platform returns a truncated file tree, preventing accidental mass deletion.
 - Every uploaded or deleted file creates a repository commit, so previous versions remain recoverable.
 
@@ -132,6 +133,7 @@ cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
 - 删除会双向传播。本地删除进入 Obsidian 回收站，远端文件仍可通过 Git 历史恢复。
 - 两端同时修改同一文件时，保留修改时间较新的版本；修改优先于删除。
 - `.obsidian`、`.git` 等隐藏路径在两端都会被忽略。
+- 空文件（0 字节）会被跳过：Gitee/GitHub 的 contents API 无法创建空文件。
 - 远端平台返回被截断的文件树时会中止同步，避免误判为批量删除。
 - 每次文件上传或删除都会生成仓库 commit，旧版本可随时恢复。
 

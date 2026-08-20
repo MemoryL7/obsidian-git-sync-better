@@ -151,6 +151,7 @@ export default class CloudSyncPlugin extends Plugin {
 		if (s.deletedRemote) parts.push(l.summaryDeleteRemote(s.deletedRemote));
 		if (s.deletedLocal) parts.push(l.summaryDeleteLocal(s.deletedLocal));
 		if (s.conflicts) parts.push(l.summaryConflict(s.conflicts));
+		if (s.skippedEmpty) parts.push(l.summarySkippedEmpty(s.skippedEmpty));
 		return parts.length ? l.summaryComplete(parts.join(", ")) : l.summaryNoChanges;
 	}
 

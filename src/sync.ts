@@ -12,6 +12,7 @@ export interface SyncSummary {
 	deletedLocal: number;
 	deletedRemote: number;
 	conflicts: number;
+	skippedEmpty: number;
 }
 
 interface LocalEntry {
@@ -30,6 +31,8 @@ export interface SyncPlan {
 	localDeletes: { path: string; loc: LocalEntry; reason: string }[];
 	pushes: { path: string; loc: LocalEntry; rem?: RemoteEntry; reason: string }[];
 	remoteDeletes: { path: string; rem: RemoteEntry; reason: string }[];
+	/** Empty local files, excluded from sync: the contents APIs cannot create them. */
+	skippedEmpty: string[];
 	/** Baseline entries for paths already identical on both sides. */
 	nextState: Record<string, string>;
 }
@@ -85,6 +88,7 @@ export class SyncEngine {
 			deletedLocal: 0,
 			deletedRemote: 0,
 			conflicts: plan.conflicts,
+			skippedEmpty: plan.skippedEmpty.length,
 		};
 		const nextState = { ...plan.nextState };
 		const step = async (path: string, fn: () => Promise<void>) => {
@@ -178,13 +182,16 @@ export class SyncEngine {
 
 	private async buildPlan(backend: StorageBackend): Promise<SyncPlan> {
 		const l = messages();
-		const [remoteList, local] = await Promise.all([
+		const [remoteList, { entries: local, empty: emptyLocal }] = await Promise.all([
 			backend.manifest(),
 			this.buildLocalManifest(backend),
 		]);
 		const remote = new Map<string, RemoteEntry>(
 			remoteList.filter((e) => !this.isExcluded(e.path)).map((e) => [e.path, e])
 		);
+		// Empty files never appear in the local manifest, so an existing remote
+		// copy would otherwise be read as "deleted locally" and get wiped.
+		for (const path of emptyLocal) remote.delete(path);
 		const base = this.plugin.syncState;
 		const basePaths = Object.keys(base).filter((p) => !this.isExcluded(p));
 
@@ -198,6 +205,7 @@ export class SyncEngine {
 			localDeletes: [],
 			pushes: [],
 			remoteDeletes: [],
+			skippedEmpty: [...emptyLocal],
 			nextState: {},
 		};
 
@@ -310,6 +318,8 @@ export class SyncEngine {
 			for (const a of plan.remoteDeletes)
 				lines.push(`- ❌ ${l.actionDeleteRemote} \`${a.path}\` — ${a.reason}`);
 		}
+		for (const p of plan.skippedEmpty)
+			lines.push(`- ⏭️ ${l.actionSkipEmpty} \`${p}\` — ${l.reasonEmptyFile}`);
 		return lines.join("\n") + "\n";
 	}
 
@@ -326,15 +336,25 @@ export class SyncEngine {
 		}
 	}
 
-	/** Builds { path -> hash } for the vault, reusing cached hashes when mtime+size are unchanged. */
-	private async buildLocalManifest(backend: StorageBackend): Promise<Map<string, LocalEntry>> {
-		const result = new Map<string, LocalEntry>();
+	/** Builds { path -> hash } for the vault, reusing cached hashes when mtime+size are unchanged.
+	 * Empty files are returned separately: the contents APIs reject them (Gitee:
+	 * 400 "content is empty"), so they are kept out of the comparison instead
+	 * of failing every sync. */
+	private async buildLocalManifest(
+		backend: StorageBackend
+	): Promise<{ entries: Map<string, LocalEntry>; empty: Set<string> }> {
+		const entries = new Map<string, LocalEntry>();
+		const empty = new Set<string>();
 		const cache = this.plugin.hashCache;
 		const seen = new Set<string>();
 
 		for (const file of this.vault.getFiles()) {
 			if (this.isExcluded(file.path)) continue;
 			seen.add(file.path);
+			if (file.stat.size === 0) {
+				empty.add(file.path);
+				continue;
+			}
 			const cached = cache[file.path];
 			let hash: string;
 			if (
@@ -353,13 +373,13 @@ export class SyncEngine {
 					algo: backend.id,
 				};
 			}
-			result.set(file.path, { file, hash, mtime: file.stat.mtime });
+			entries.set(file.path, { file, hash, mtime: file.stat.mtime });
 		}
 
 		for (const path of Object.keys(cache)) {
 			if (!seen.has(path)) delete cache[path];
 		}
-		return result;
+		return { entries, empty };
 	}
 
 	/** Writes the file and returns its resulting local mtime (for the hash cache). */

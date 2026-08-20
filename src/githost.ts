@@ -90,10 +90,13 @@ export class GitHostBackend implements StorageBackend {
 			const l = messages();
 			let detail = "";
 			try {
-				detail = (resp.json as { message?: string }).message ?? "";
+				// Gitee reports errors as {messages: [...]}, GitHub as {message: "..."}.
+				const body = resp.json as { message?: string; messages?: string[] };
+				detail = [body.message, ...(body.messages ?? [])].filter(Boolean).join("; ");
 			} catch {
-				detail = resp.text.slice(0, 200);
+				// Non-JSON body; fall through to the text snippet below.
 			}
+			if (!detail) detail = resp.text.slice(0, 200);
 			throw new GitHostError(resp.status, l.apiFailed(this.cfg.host, method, resp.status, detail));
 		}
 		return resp;
