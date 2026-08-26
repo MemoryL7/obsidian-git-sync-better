@@ -63,6 +63,8 @@ const en = {
 	settingsExcludeFolders: "Excluded folders",
 	settingsExcludeFoldersDesc:
 		"Comma-separated folder prefixes that will not be synced, for example: templates, attachments/cache",
+	settingsSyncDotObsidian: "Sync .obsidian folder",
+	settingsSyncDotObsidianDesc: "Include the .obsidian folder in sync so plugin settings are shared across devices. Only enable when all devices use the same platform.",
 	settingsDebugLog: "Diagnostic log",
 	settingsDebugLogDesc:
 		"Record each sync plan and result in _gitee-sync-log.md at the vault root. The log itself is excluded from sync.",
@@ -161,6 +163,8 @@ const zh: typeof en = {
 	settingsSyncOnStartDesc: "Obsidian 打开后自动执行一次同步。",
 	settingsExcludeFolders: "排除目录",
 	settingsExcludeFoldersDesc: "逗号分隔的目录前缀，这些目录不参与同步，例如：templates, attachments/cache",
+	settingsSyncDotObsidian: "同步 .obsidian 目录",
+	settingsSyncDotObsidianDesc: "将 .obsidian 目录纳入同步，使插件设置在设备间共享。仅在所有设备使用相同平台时启用。",
 	settingsDebugLog: "调试日志",
 	settingsDebugLogDesc:
 		"把每次同步的完整计划和结果记录到 vault 根目录的 _gitee-sync-log.md（该文件不参与同步）。",

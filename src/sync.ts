@@ -60,10 +60,14 @@ export class SyncEngine {
 
 	private isExcluded(path: string): boolean {
 		if (path === LOG_FILE) return true;
-		// Hidden files/dirs (.obsidian, .git, ...) are invisible to Obsidian's
-		// index, so a remote copy would otherwise read as "new remote file"
-		// and clobber local config on pull. Ignore them on both sides.
-		if (path.split("/").some((seg) => seg.startsWith("."))) return true;
+		const segments = path.split("/");
+		for (const seg of segments) {
+			if (seg === ".obsidian") {
+				if (!this.plugin.settings.syncDotObsidian) return true;
+				continue;
+			}
+			if (seg.startsWith(".")) return true;
+		}
 		return this.excludedPrefixes().some((p) => path.startsWith(p));
 	}
 

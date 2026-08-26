@@ -1,27 +1,51 @@
-# Gitee Sync
+# Gitee Sync Better
 
 [English](#english) | [中文](#中文)
 
+基于 [MemoryL7/obsidian-git-sync](https://github.com/MemoryL7/obsidian-git-sync) 的增强版，新增 `.obsidian` 目录同步支持。
+
+## 与原版的区别
+
+| 特性 | 原版 Gitee Sync | Gitee Sync Better |
+|---|---|---|
+| .obsidian 目录同步 | ❌ 硬编码排除 | ✅ 可通过设置开关 |
+| 其他隐藏目录 (.git 等) | 排除 | 排除（行为不变） |
+| 其余功能 | — | 完全一致 |
+
+新增 **「同步 .obsidian 目录」** 开关，开启后 `.obsidian` 文件夹（包括插件配置、快捷键设置等）会参与同步，方便在 PC 和手机之间共享 Obsidian 配置。其余隐藏目录（如 `.git`）仍然被排除。
+
+> ⚠️ 仅在所有设备使用相同平台（均为桌面端或均为移动端）时开启此选项。不同平台的 Obsidian 配置可能不兼容。
+
+---
+
 ## English
 
-Gitee Sync stores an Obsidian vault as ordinary files in a private **Gitee or GitHub repository**. It connects directly to the platform API, requires no server or local Git installation, and works on desktop, iOS, and Android.
+Gitee Sync Better stores an Obsidian vault as ordinary files in a private **Gitee or GitHub repository**. It connects directly to the platform API, requires no server or local Git installation, and works on desktop, iOS, and Android.
 
 The sync engine uses Git blob hashes and a three-way comparison between the local vault, remote repository, and the last successful device-local baseline. It supports incremental two-way sync, deletion propagation, conflict resolution, dry-run previews, and diagnostic logs. When both sides modify the same file, the newer modification wins.
 
 The plugin interface automatically follows Obsidian's language and currently supports English and Chinese.
 
+### What's different from upstream
+
+This fork adds a **Sync .obsidian folder** toggle in settings. When enabled, the `.obsidian` directory (plugin configs, hotkeys, etc.) is included in sync, so your Obsidian setup is shared across devices. Other hidden directories like `.git` remain excluded.
+
+> ⚠️ Only enable this when all devices run on the same platform. Desktop and mobile Obsidian configs may not be compatible.
+
 ### Installation
 
-In Obsidian, open **Settings → Community plugins → Browse**, search for **Gitee Sync**, install it, and enable it.
+**From Obsidian Community Plugins (recommended):**
+1. Open **Settings → Community plugins → Browse**
+2. Search for **Gitee Sync Better**
+3. Install and enable
 
-For local development builds:
-
+**Manual build:**
 ```bash
 npm install
 npm run build
 
-mkdir -p "<vault>/.obsidian/plugins/gitee-sync"
-cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
+mkdir -p "<vault>/.obsidian/plugins/gitee-sync-better"
+cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync-better/"
 ```
 
 ### Repository and token
@@ -42,57 +66,57 @@ cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
 | Automatic sync interval | Minutes between syncs; `0` disables automatic sync |
 | Sync on startup | Runs one sync when Obsidian opens |
 | Excluded folders | Comma-separated folder prefixes that are not synced |
+| **Sync .obsidian folder** | **When enabled, .obsidian config files are synced across devices** |
 | Diagnostic log | Writes the sync plan and result to `_gitee-sync-log.md` |
-
-Trigger sync from the ribbon icon, the **Sync now** command, the status bar, the timer, or startup sync. Use **Preview sync plan** to inspect planned actions without changing either side.
 
 ### Multiple devices
 
 Install and configure the plugin on every device with the same repository. Each device keeps its own sync baseline. A new device downloads the remote vault on its first sync and uses incremental sync afterwards.
 
+To share plugin settings across devices, enable **Sync .obsidian folder** on all devices.
+
 Mobile operating systems suspend timers in the background, so enabling **Sync on startup** is recommended.
-
-### iOS file visibility
-
-If a downloaded folder is visible but a file with a non-standard extension is not, open **Settings → Files and links** and enable **Detect all file extensions**. The file may already be present but hidden by Obsidian's file explorer.
 
 ### Sync behavior
 
 - Local-only changes are uploaded; remote-only changes are downloaded.
 - Deletions propagate in both directions. Local deletions use Obsidian's trash, and remote history remains recoverable through Git.
 - If both sides modify the same file, the newer modification wins. A modification wins over a deletion.
-- Hidden paths such as `.obsidian` and `.git` are ignored on both sides.
+- Hidden paths such as `.git` are ignored on both sides. `.obsidian` is synced only when the setting is enabled.
 - Empty files (0 bytes) are skipped: the Gitee/GitHub contents APIs cannot create them.
 - Sync stops if the remote platform returns a truncated file tree, preventing accidental mass deletion.
 - Every uploaded or deleted file creates a repository commit, so previous versions remain recoverable.
 
-### Limitations and security
-
-- The first sync of a large vault creates one commit per file and may be limited by platform API quotas.
-- Keep large attachments in an excluded folder. Individual files should preferably remain below 50 MB.
-- Tokens are stored in `.obsidian/plugins/gitee-sync/data.json`. Exclude this file when backing up the vault with other tools.
-- Do not manually push the same vault to the same repository while the plugin manages it.
+---
 
 ## 中文
 
-Gitee Sync 将 Obsidian vault 中的笔记以普通文件形式保存到私有 **Gitee 或 GitHub 仓库**。插件直接连接平台 API，无需服务器或本地安装 Git，并支持桌面端、iOS 和 Android。
+基于 [MemoryL7/obsidian-git-sync](https://github.com/MemoryL7/obsidian-git-sync) 的增强版，新增 `.obsidian` 目录同步支持。
 
-同步引擎使用 Git blob 内容哈希，对本地 vault、远端仓库和每台设备上次成功同步的基线进行三方比较。支持双向增量同步、删除同步、冲突处理、同步预演和诊断日志。两端同时修改同一文件时，保留修改时间较新的版本。
+### 与原版的区别
 
-插件界面会自动跟随 Obsidian 的语言，目前支持中文和英语。
+原版硬编码排除了所有以 `.` 开头的目录（包括 `.obsidian`、`.git` 等），导致插件配置无法在设备间同步。
+
+本版本在设置中新增了 **「同步 .obsidian 目录」** 开关：
+- **关闭（默认）**：行为与原版完全一致，`.obsidian` 和其他隐藏目录均被排除
+- **开启**：`.obsidian` 目录参与同步，插件配置、快捷键等可在多设备间共享。`.git` 等其他隐藏目录仍然排除
+
+> ⚠️ 仅在所有设备使用相同平台（均为桌面端或均为移动端）时开启此选项。不同平台的 Obsidian 配置可能不兼容。
 
 ### 安装
 
-在 Obsidian 中打开 **设置 → 第三方插件 → 浏览**，搜索 **Gitee Sync**，安装并启用插件。
+**从 Obsidian 社区插件安装（推荐）：**
+1. 打开 **设置 → 第三方插件 → 浏览**
+2. 搜索 **Gitee Sync Better**
+3. 安装并启用
 
-本地开发版本可手动构建安装：
-
+**手动构建：**
 ```bash
 npm install
 npm run build
 
-mkdir -p "<vault>/.obsidian/plugins/gitee-sync"
-cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
+mkdir -p "<vault>/.obsidian/plugins/gitee-sync-better"
+cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync-better/"
 ```
 
 ### 仓库和令牌
@@ -113,33 +137,23 @@ cp main.js manifest.json "<vault>/.obsidian/plugins/gitee-sync/"
 | 自动同步间隔 | 同步间隔分钟数，`0` 表示关闭 |
 | 启动时同步 | Obsidian 打开后执行一次同步 |
 | 排除目录 | 逗号分隔、不参与同步的目录前缀 |
+| **同步 .obsidian 目录** | **开启后 `.obsidian` 配置文件会在设备间同步** |
 | 调试日志 | 将同步计划和结果写入 `_gitee-sync-log.md` |
-
-可通过侧边栏同步图标、命令面板中的 **立即同步**、状态栏、定时器或启动时同步触发。使用 **预览同步计划** 可以在不修改两端文件的情况下检查计划动作。
 
 ### 多设备
 
 在每台设备安装插件并配置同一仓库。每台设备分别保存同步基线。新设备首次同步会下载远端 vault，之后只进行增量同步。
 
+如需在设备间共享插件设置，请在所有设备上开启 **同步 .obsidian 目录**。
+
 移动端进入后台后，系统可能暂停定时器，建议开启 **启动时同步**。
-
-### iOS 文件显示
-
-如果同步后能看到新目录，却看不到某些非标准扩展名文件，请打开 **设置 → 文件与链接 → 检测所有文件扩展名**。文件可能已经下载，只是被 Obsidian 文件列表隐藏。
 
 ### 同步规则
 
 - 只在本地修改的文件会上传，只在远端修改的文件会下载。
 - 删除会双向传播。本地删除进入 Obsidian 回收站，远端文件仍可通过 Git 历史恢复。
 - 两端同时修改同一文件时，保留修改时间较新的版本；修改优先于删除。
-- `.obsidian`、`.git` 等隐藏路径在两端都会被忽略。
+- `.git` 等隐藏路径在两端都会被忽略。`.obsidian` 仅在设置开启时参与同步。
 - 空文件（0 字节）会被跳过：Gitee/GitHub 的 contents API 无法创建空文件。
 - 远端平台返回被截断的文件树时会中止同步，避免误判为批量删除。
 - 每次文件上传或删除都会生成仓库 commit，旧版本可随时恢复。
-
-### 限制与安全
-
-- 大型 vault 首次同步会逐文件生成 commit，可能受到平台 API 限流影响。
-- 建议将大附件放入排除目录，单文件尽量保持在 50 MB 以下。
-- 令牌存放在 `.obsidian/plugins/gitee-sync/data.json`，使用其他工具备份 vault 时请排除此文件。
-- 插件管理仓库后，不要同时把同一个 vault 手动推送到相同仓库。
