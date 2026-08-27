@@ -1,7 +1,7 @@
 {
 	"id": "gitee-sync-better",
 	"name": "Gitee Sync Better",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"minAppVersion": "1.8.7",
 	"description": "Sync your vault to a Gitee or GitHub repository. Enhanced with config folder sync support.",
 	"author": "eric, yf",
