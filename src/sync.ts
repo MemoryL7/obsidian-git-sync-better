@@ -68,6 +68,14 @@ export class SyncEngine {
 			}
 			if (seg.startsWith(".")) return true;
 		}
+		// Volatile per-device state: written continuously by Obsidian and never
+		// meaningfully mergeable, so it is excluded even when .obsidian syncs.
+		if (
+			path === ".obsidian/workspace.json" ||
+			path === ".obsidian/workspace-mobile.json"
+		) {
+			return true;
+		}
 		return this.excludedPrefixes().some((p) => path.startsWith(p));
 	}
 
@@ -124,7 +132,7 @@ export class SyncEngine {
 			}
 			for (const { path, loc } of plan.localDeletes) {
 				await step(path, async () => {
-					await this.vault.trash(loc.file, true);
+					await this.deleteLocalFile(path, loc);
 					delete this.plugin.hashCache[path];
 					summary.deletedLocal++;
 				});
@@ -134,7 +142,7 @@ export class SyncEngine {
 			// change surfaces as an API error instead of a silent overwrite).
 			for (const { path, loc, rem } of plan.pushes) {
 				await step(path, async () => {
-					const data = await this.vault.readBinary(loc.file);
+					const data = await this.readEntryData(path, loc);
 					await backend.upload(path, data, {
 						hash: loc.hash,
 						mtime: loc.mtime,
@@ -380,16 +388,85 @@ export class SyncEngine {
 			entries.set(file.path, { file, hash, mtime: file.stat.mtime });
 		}
 
+		// Obsidian's index never includes hidden directories, so .obsidian files
+		// are invisible to getFiles(). Enumerate them via the adapter instead,
+		// otherwise the toggle could never push config changes.
+		if (this.plugin.settings.syncDotObsidian) {
+			await this.collectHiddenEntries(".obsidian", backend, entries, empty, seen);
+		}
+
 		for (const path of Object.keys(cache)) {
 			if (!seen.has(path)) delete cache[path];
 		}
 		return { entries, empty };
 	}
 
+	/** Recursively adds .obsidian files (invisible to vault.getFiles()) to the local manifest. */
+	private async collectHiddenEntries(
+		dir: string,
+		backend: StorageBackend,
+		entries: Map<string, LocalEntry>,
+		empty: Set<string>,
+		seen: Set<string>
+	): Promise<void> {
+		const adapter = this.vault.adapter;
+		let listing;
+		try {
+			listing = await adapter.list(dir);
+		} catch {
+			return; // Directory does not exist on this device.
+		}
+		for (const path of listing.files) {
+			if (this.isExcluded(path)) {
+				continue;
+			}
+			seen.add(path);
+			const stat = await adapter.stat(path);
+			if (!stat || stat.size === 0) {
+				empty.add(path);
+				continue;
+			}
+			const mtime = stat.mtime;
+			const cached = this.plugin.hashCache[path];
+			let hash: string;
+			if (
+				cached &&
+				cached.algo === backend.id &&
+				cached.mtime === mtime &&
+				cached.size === stat.size
+			) {
+				hash = cached.hash;
+			} else {
+				hash = await backend.hashData(await adapter.readBinary(path));
+				this.plugin.hashCache[path] = { mtime, size: stat.size, hash, algo: backend.id };
+			}
+			// No TFile exists for hidden paths; entries carry a null file and all
+			// reads/writes for them go through the adapter.
+			entries.set(path, { file: null as unknown as TFile, hash, mtime });
+		}
+		for (const sub of listing.folders) {
+			await this.collectHiddenEntries(sub, backend, entries, empty, seen);
+		}
+	}
+
+	/** Reads any file, including hidden ones not present in the vault index. */
+	private async readEntryData(path: string, loc: LocalEntry): Promise<ArrayBuffer> {
+		if (loc.file instanceof TFile) return this.vault.readBinary(loc.file);
+		return this.vault.adapter.readBinary(path);
+	}
+
 	/** Writes the file and returns its resulting local mtime (for the hash cache). */
 	private async writeLocal(path: string, data: ArrayBuffer, mtime: number): Promise<number> {
 		const dir = path.split("/").slice(0, -1).join("/");
 		if (dir) await this.ensureFolder(dir);
+		const hidden = path.split("/").some((seg) => seg.startsWith("."));
+		if (hidden) {
+			// Hidden paths have no TFile and must not use vault.createBinary,
+			// which throws "file already exists" for unindexed files.
+			await this.vault.adapter.writeBinary(path, data);
+			const stat = await this.vault.adapter.stat(path);
+			return stat?.mtime ?? mtime;
+		}
 		const existing = this.vault.getAbstractFileByPath(path);
 		const options = mtime > 0 ? { mtime } : undefined;
 		if (existing instanceof TFile) {
@@ -406,6 +483,16 @@ export class SyncEngine {
 		let current = "";
 		for (const part of parts) {
 			current = current ? `${current}/${part}` : part;
+			if (current.startsWith(".")) {
+				// Hidden folders are invisible to getAbstractFileByPath on some
+				// platforms; mkdir is idempotent, so just ensure it exists.
+				try {
+					await this.vault.adapter.mkdir(current);
+				} catch {
+					// Already exists.
+				}
+				continue;
+			}
 			if (!this.vault.getAbstractFileByPath(current)) {
 				try {
 					await this.vault.createFolder(current);
@@ -413,6 +500,15 @@ export class SyncEngine {
 					// Folder may have been created concurrently; ignore.
 				}
 			}
+		}
+	}
+
+	/** Deletes a local file: trash indexed files, adapter-remove hidden ones. */
+	private async deleteLocalFile(path: string, loc: LocalEntry): Promise<void> {
+		if (loc.file instanceof TFile) {
+			await this.vault.trash(loc.file, true);
+		} else {
+			await this.vault.adapter.remove(path);
 		}
 	}
 }

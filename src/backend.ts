@@ -32,6 +32,9 @@ export interface StorageBackend {
 }
 
 export function createBackend(s: SyncSettings): StorageBackend {
+	// Test seam: logic tests inject a mock backend through settings.
+	const injected = (s as { __testBackend?: StorageBackend }).__testBackend;
+	if (injected) return injected;
 	if (s.backend === "github") {
 		if (!s.githubOwner || !s.githubRepo || !s.githubToken) {
 			throw new Error(messages().missingGithubSettings);
